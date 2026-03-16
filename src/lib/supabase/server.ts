@@ -8,5 +8,7 @@ export function createServiceClient() {
     throw new Error("Missing Supabase environment variables");
   }
 
-  return createClient(url, key);
+  return createClient(url, key, {
+    db: { schema: "omnivoc" },
+  });
 }
