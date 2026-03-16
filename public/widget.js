@@ -6,11 +6,35 @@
 
   var projectKey = script.getAttribute("data-project-key");
   var apiBase = script.src.replace(/\/widget\.js.*$/, "");
+  var lang = script.getAttribute("data-lang") || document.documentElement.lang || "ja";
 
   if (!projectKey) {
     console.error("[OmniVOC] data-project-key is required");
     return;
   }
+
+  // i18n
+  var i18n = {
+    ja: {
+      title: "フィードバックを送る",
+      placeholder: "ご意見・ご要望をお聞かせください",
+      submit: "送信",
+      sending: "送信中...",
+      thanks: "ありがとうございます！<br>フィードバックを受け付けました。",
+      error: "送信失敗。もう一度お試しください",
+      tooltip: "フィードバックを送る",
+    },
+    en: {
+      title: "Send Feedback",
+      placeholder: "Share your thoughts or suggestions",
+      submit: "Submit",
+      sending: "Sending...",
+      thanks: "Thank you!<br>Your feedback has been received.",
+      error: "Failed to send. Please try again.",
+      tooltip: "Send feedback",
+    },
+  };
+  var t = i18n[lang] || i18n.en;
 
   // スタイル
   var style = document.createElement("style");
@@ -33,19 +57,25 @@
   var btn = document.createElement("button");
   btn.id = "omnivoc-btn";
   btn.innerHTML = "&#9993;";
-  btn.title = "フィードバックを送る";
+  btn.title = t.tooltip;
   document.body.appendChild(btn);
 
   // パネル
   var panel = document.createElement("div");
   panel.id = "omnivoc-panel";
-  panel.innerHTML =
-    '<header>フィードバックを送る</header>' +
-    '<div class="body">' +
-    '<textarea id="omnivoc-input" placeholder="ご意見・ご要望をお聞かせください"></textarea>' +
-    '<button class="submit" id="omnivoc-submit">送信</button>' +
-    "</div>";
   document.body.appendChild(panel);
+
+  function renderForm() {
+    panel.innerHTML =
+      "<header>" + t.title + "</header>" +
+      '<div class="body">' +
+      '<textarea id="omnivoc-input" placeholder="' + t.placeholder + '"></textarea>' +
+      '<button class="submit" id="omnivoc-submit">' + t.submit + "</button>" +
+      "</div>";
+    document.getElementById("omnivoc-submit").addEventListener("click", handleSubmit);
+  }
+
+  renderForm();
 
   var isOpen = false;
   btn.addEventListener("click", function () {
@@ -54,15 +84,14 @@
     btn.innerHTML = isOpen ? "&#10005;" : "&#9993;";
   });
 
-  var submitBtn = document.getElementById("omnivoc-submit");
-  var input = document.getElementById("omnivoc-input");
-
-  submitBtn.addEventListener("click", function () {
+  function handleSubmit() {
+    var input = document.getElementById("omnivoc-input");
+    var submitBtn = document.getElementById("omnivoc-submit");
     var content = input.value.trim();
     if (!content) return;
 
     submitBtn.disabled = true;
-    submitBtn.textContent = "送信中...";
+    submitBtn.textContent = t.sending;
 
     fetch(apiBase + "/api/feedback", {
       method: "POST",
@@ -76,27 +105,21 @@
       .then(function (res) {
         if (res.ok) {
           panel.querySelector(".body").innerHTML =
-            '<div class="thanks">ありがとうございます！<br>フィードバックを受け付けました。</div>';
+            '<div class="thanks">' + t.thanks + "</div>";
           setTimeout(function () {
             isOpen = false;
             panel.className = "";
             btn.innerHTML = "&#9993;";
-            panel.querySelector(".body").innerHTML =
-              '<textarea id="omnivoc-input" placeholder="ご意見・ご要望をお聞かせください"></textarea>' +
-              '<button class="submit" id="omnivoc-submit">送信</button>';
-            // re-bind
-            document
-              .getElementById("omnivoc-submit")
-              .addEventListener("click", arguments.callee);
+            renderForm();
           }, 2000);
         } else {
           submitBtn.disabled = false;
-          submitBtn.textContent = "送信失敗。もう一度お試しください";
+          submitBtn.textContent = t.error;
         }
       })
       .catch(function () {
         submitBtn.disabled = false;
-        submitBtn.textContent = "送信失敗。もう一度お試しください";
+        submitBtn.textContent = t.error;
       });
-  });
+  }
 })();
