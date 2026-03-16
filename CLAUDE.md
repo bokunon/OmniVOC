@@ -2,16 +2,15 @@
 
 ## プロジェクト概要
 
-ユーザーの声（Voice of Customer）を複数チャネル（Web / Slack / LINE）から収集し、集約・チケット化するプロダクト。
+ユーザーの声（Voice of Customer）を複数チャネルから収集し、集約・チケット化するプロダクト。
+OmniVOC 自体は Bot を持たず、各プロダクトの既存チャネル（Slack Bot / LINE Bot 等）から API 経由でフィードバックを受け取る。Web 向けには埋め込みウィジェットを提供する。
 
 ## 技術スタック
 
 - **フレームワーク**: Next.js (App Router)
 - **DB**: Supabase (PostgreSQL)
 - **ホスティング**: Vercel
-- **チケット連携**: GitHub API
-- **Slack 連携**: `@slack/bolt`
-- **LINE 連携**: `@line/bot-sdk`
+- **チケット連携**: GitHub API (Octokit)
 
 ## プロジェクト構成
 
@@ -25,10 +24,10 @@
 ├── src/
 │   └── app/
 │       ├── api/
-│       │   ├── feedback/    # Web Widget 用 API
-│       │   ├── slack/       # Slack Webhook
-│       │   └── line/        # LINE Webhook
+│       │   └── feedback/    # フィードバック受付 API（全チャネル共通）
 │       └── dashboard/       # 管理ダッシュボード
+├── public/
+│   └── widget.js            # 埋め込みウィジェット JS
 └── CLAUDE.md                # このファイル
 ```
 
@@ -57,14 +56,6 @@ DIRECT_DATABASE_URL=
 VERCEL_TOKEN=
 VERCEL_ORG_ID=
 VERCEL_PROJECT_ID=
-
-# Slack
-SLACK_BOT_TOKEN=
-SLACK_SIGNING_SECRET=
-
-# LINE
-LINE_CHANNEL_ACCESS_TOKEN=
-LINE_CHANNEL_SECRET=
 
 # GitHub (チケット連携用)
 GITHUB_TOKEN=
