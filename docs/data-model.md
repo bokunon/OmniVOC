@@ -1,4 +1,4 @@
-# OmniVOC - データモデル（V1）
+# OmniVOC - データモデル
 
 ## テーブル設計
 
@@ -24,12 +24,27 @@ OmniVOC に登録されたプロジェクト。フィードバックの送信元
 | `project_id` | `uuid` FK → projects.id NOT NULL | どのプロジェクトから来たか |
 | `channel` | `text` NOT NULL | チャネル種別: `web` / `slack` / `line` / その他 |
 | `content` | `text` NOT NULL | フィードバック本文 |
-| `status` | `text` NOT NULL DEFAULT `'new'` | `new` / `ticketed` / `resolved` |
+| `status` | `text` NOT NULL DEFAULT `'auto_new'` | ステータス（下記参照） |
+| `ai_confidence` | `real` | AI 判定の信頼度スコア（0.0〜1.0） |
+| `ai_reason` | `text` | AI 判定の理由テキスト |
+| `suggested_issue_url` | `text` | AI が提案した紐付け先 Issue URL |
+| `reviewed` | `boolean` NOT NULL DEFAULT `false` | 管理者が確認済みか |
+| `reviewed_at` | `timestamptz` | 確認日時 |
 | `sender_id` | `text` | チャネル固有の送信者 ID（Slack user ID, LINE user ID 等） |
 | `sender_name` | `text` | 表示名（取得可能な場合） |
 | `metadata` | `jsonb` | チャネル固有の追加情報 |
 | `created_at` | `timestamptz` NOT NULL DEFAULT `now()` | |
 | `updated_at` | `timestamptz` NOT NULL DEFAULT `now()` | |
+
+### ステータス一覧
+
+| ステータス | 意味 | 設定者 |
+|-----------|------|--------|
+| `auto_new` | AI 判定: 新規トピック | AI |
+| `auto_linked` | AI 判定: 既存 open Issue に類似 | AI |
+| `auto_resolved` | AI 判定: 対応済み closed Issue と同一 | AI |
+| `ticketed` | 確認済み・チケット化済み | 管理者 |
+| `resolved` | 確認済み・対応不要 | 管理者 |
 
 ### feedback_issues
 
@@ -48,8 +63,15 @@ OmniVOC に登録されたプロジェクト。フィードバックの送信元
 
 ```
 projects ──── 1:N ──── feedbacks ──── N:M ──── GitHub Issues (外部)
-                                      │
-                                (feedback_issues)
+                          │                        │
+                          │ AI 判定結果             │
+                          │ ・ai_confidence    (feedback_issues)
+                          │ ・ai_reason
+                          │ ・suggested_issue_url
+                          │
+                          │ 管理者確認
+                          │ ・reviewed
+                          │ ・reviewed_at
 ```
 
 ## API リクエスト例
@@ -57,7 +79,7 @@ projects ──── 1:N ──── feedbacks ──── N:M ──── G
 ```json
 POST /api/feedback
 {
-  "project_key": "pretalk",    // → projects.project_key で検索 → project_id
+  "project_key": "pretalk",
   "channel": "slack",
   "content": "もっとこうして欲しい",
   "sender_id": "U1234567",
@@ -65,8 +87,21 @@ POST /api/feedback
 }
 ```
 
+### レスポンス例
+
+```json
+201 Created
+{
+  "id": "550e8400-e29b-41d4-a716-446655440000",
+  "status": "auto_linked",
+  "ai_confidence": 0.87,
+  "ai_reason": "既存 Issue #42「UIの改善要望」と類似",
+  "suggested_issue_url": "https://github.com/bokunon/pretalk/issues/42"
+}
+```
+
 ## インデックス
 
 - `projects`: `(project_key)` UNIQUE
-- `feedbacks`: `(project_id, status)`, `(project_id, channel)`, `(created_at DESC)`
+- `feedbacks`: `(project_id, status)`, `(project_id, reviewed)`, `(created_at DESC)`
 - `feedback_issues`: `(feedback_id)`, `(issue_url)`
