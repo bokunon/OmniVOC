@@ -16,8 +16,8 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(new URL("/dashboard", request.url));
   }
 
-  const clientId = process.env.GITHUB_OAUTH_CLIENT_ID;
-  const clientSecret = process.env.GITHUB_OAUTH_CLIENT_SECRET;
+  const clientId = process.env.GITHUB_OAUTH_CLIENT_ID?.trim();
+  const clientSecret = process.env.GITHUB_OAUTH_CLIENT_SECRET?.trim();
 
   if (!clientId || !clientSecret) {
     console.error("[OAuth] Missing GITHUB_OAUTH_CLIENT_ID or GITHUB_OAUTH_CLIENT_SECRET");
@@ -43,10 +43,11 @@ export async function GET(request: NextRequest) {
   const tokenData = await tokenRes.json();
 
   if (tokenData.error || !tokenData.access_token) {
-    console.error("[OAuth] Token exchange failed:", JSON.stringify(tokenData));
+    const debugInfo = `${tokenData.error_description || tokenData.error || "token_exchange_failed"} (cid_len=${clientId?.length},cs_len=${clientSecret?.length})`;
+    console.error("[OAuth] Token exchange failed:", JSON.stringify(tokenData), debugInfo);
     return NextResponse.redirect(
       new URL(
-        `/dashboard?error=${encodeURIComponent(tokenData.error_description || tokenData.error || "token_exchange_failed")}`,
+        `/dashboard?error=${encodeURIComponent(debugInfo)}`,
         request.url
       )
     );
