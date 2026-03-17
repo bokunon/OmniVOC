@@ -3,8 +3,27 @@ import { setSession } from "@/lib/session";
 
 export async function GET(request: NextRequest) {
   const code = request.nextUrl.searchParams.get("code");
+  const error = request.nextUrl.searchParams.get("error");
+
+  if (error) {
+    console.error("[OAuth] GitHub returned error:", error);
+    return NextResponse.redirect(
+      new URL(`/dashboard?error=${encodeURIComponent(error)}`, request.url)
+    );
+  }
+
   if (!code) {
     return NextResponse.redirect(new URL("/dashboard", request.url));
+  }
+
+  const clientId = process.env.GITHUB_OAUTH_CLIENT_ID;
+  const clientSecret = process.env.GITHUB_OAUTH_CLIENT_SECRET;
+
+  if (!clientId || !clientSecret) {
+    console.error("[OAuth] Missing GITHUB_OAUTH_CLIENT_ID or GITHUB_OAUTH_CLIENT_SECRET");
+    return NextResponse.redirect(
+      new URL("/dashboard?error=oauth_not_configured", request.url)
+    );
   }
 
   // Exchange code for token
@@ -15,15 +34,22 @@ export async function GET(request: NextRequest) {
       Accept: "application/json",
     },
     body: JSON.stringify({
-      client_id: process.env.GITHUB_OAUTH_CLIENT_ID,
-      client_secret: process.env.GITHUB_OAUTH_CLIENT_SECRET,
+      client_id: clientId,
+      client_secret: clientSecret,
       code,
     }),
   });
 
   const tokenData = await tokenRes.json();
-  if (!tokenData.access_token) {
-    return NextResponse.redirect(new URL("/dashboard?error=auth_failed", request.url));
+
+  if (tokenData.error || !tokenData.access_token) {
+    console.error("[OAuth] Token exchange failed:", JSON.stringify(tokenData));
+    return NextResponse.redirect(
+      new URL(
+        `/dashboard?error=${encodeURIComponent(tokenData.error_description || tokenData.error || "token_exchange_failed")}`,
+        request.url
+      )
+    );
   }
 
   // Get user info

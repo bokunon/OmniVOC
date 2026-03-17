@@ -289,6 +289,12 @@ export default function DashboardPage() {
       <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center gap-6">
         <h1 className="text-3xl font-bold">OmniVOC</h1>
         <p className="text-gray-500">ダッシュボードにアクセスするには GitHub でログインしてください</p>
+        {typeof window !== "undefined" &&
+          new URLSearchParams(window.location.search).get("error") && (
+            <p className="text-sm text-red-600">
+              認証エラー: {new URLSearchParams(window.location.search).get("error")}
+            </p>
+          )}
         <a
           href="/api/auth/login"
           className="bg-black text-white px-6 py-3 rounded-lg hover:bg-gray-800"
