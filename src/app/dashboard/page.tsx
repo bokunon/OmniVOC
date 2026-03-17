@@ -342,6 +342,15 @@ export default function DashboardPage() {
             >
               <span className="font-medium">{p.display_name}</span>
               <span className="text-gray-400">{p.repo_full_name}</span>
+              <a
+                href={`/board/${p.project_key}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-blue-500 hover:underline"
+                title="公開ボード"
+              >
+                Board
+              </a>
               <button
                 onClick={() => handleDeleteProject(p.id, p.display_name)}
                 className="text-red-400 hover:text-red-600"
