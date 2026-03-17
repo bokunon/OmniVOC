@@ -43,11 +43,10 @@ export async function GET(request: NextRequest) {
   const tokenData = await tokenRes.json();
 
   if (tokenData.error || !tokenData.access_token) {
-    const debugInfo = `${tokenData.error_description || tokenData.error || "token_exchange_failed"} (cid_len=${clientId?.length},cs_len=${clientSecret?.length})`;
-    console.error("[OAuth] Token exchange failed:", JSON.stringify(tokenData), debugInfo);
+    console.error("[OAuth] Token exchange failed:", JSON.stringify(tokenData));
     return NextResponse.redirect(
       new URL(
-        `/dashboard?error=${encodeURIComponent(debugInfo)}`,
+        `/dashboard?error=${encodeURIComponent(tokenData.error_description || tokenData.error || "auth_failed")}`,
         request.url
       )
     );
