@@ -29,7 +29,7 @@ export async function POST(request: NextRequest) {
 
   // GitHub API で認証・権限チェック
   try {
-    const octokit = createOctokit();
+    const octokit = await createOctokit();
     const [owner, repo] = repo_full_name.split("/");
     const { data: repoData } = await octokit.rest.repos.get({ owner, repo });
 

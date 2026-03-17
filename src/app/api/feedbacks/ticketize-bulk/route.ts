@@ -42,7 +42,7 @@ export async function POST(request: NextRequest) {
     issue_body || `## ユーザーフィードバック\n\n${feedbackSummary}`;
 
   // GitHub Issue を作成
-  const octokit = createOctokit();
+  const octokit = await createOctokit();
   const issue = await createIssue(octokit, repo_full_name, title, finalBody);
 
   // 全フィードバックを紐付け

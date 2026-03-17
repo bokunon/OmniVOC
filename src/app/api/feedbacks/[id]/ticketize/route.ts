@@ -30,7 +30,7 @@ export async function POST(
   }
 
   // GitHub Issue を作成
-  const octokit = createOctokit();
+  const octokit = await createOctokit();
   const issue = await createIssue(
     octokit,
     repo_full_name,

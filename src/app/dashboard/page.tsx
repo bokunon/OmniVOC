@@ -45,6 +45,8 @@ const CHANNEL_LABELS: Record<string, string> = {
 };
 
 export default function DashboardPage() {
+  const [authUser, setAuthUser] = useState<{ user: string; avatar: string } | null>(null);
+  const [authChecked, setAuthChecked] = useState(false);
   const [feedbacks, setFeedbacks] = useState<Feedback[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [filterProject, setFilterProject] = useState("");
@@ -90,11 +92,22 @@ export default function DashboardPage() {
   };
 
   useEffect(() => {
-    fetchProjects();
+    fetch("/api/auth/session")
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.authenticated) {
+          setAuthUser({ user: data.user, avatar: data.avatar });
+        }
+        setAuthChecked(true);
+      });
   }, []);
+
   useEffect(() => {
-    fetchFeedbacks();
-  }, [fetchFeedbacks]);
+    if (authUser) fetchProjects();
+  }, [authUser]);
+  useEffect(() => {
+    if (authUser) fetchFeedbacks();
+  }, [fetchFeedbacks, authUser]);
 
   const handleReview = async (
     id: string,
@@ -258,17 +271,59 @@ export default function DashboardPage() {
     });
   };
 
+  const handleLogout = async () => {
+    await fetch("/api/auth/logout", { method: "POST" });
+    setAuthUser(null);
+  };
+
+  if (!authChecked) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <p className="text-gray-500">読み込み中...</p>
+      </div>
+    );
+  }
+
+  if (!authUser) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center gap-6">
+        <h1 className="text-3xl font-bold">OmniVOC</h1>
+        <p className="text-gray-500">ダッシュボードにアクセスするには GitHub でログインしてください</p>
+        <a
+          href="/api/auth/login"
+          className="bg-black text-white px-6 py-3 rounded-lg hover:bg-gray-800"
+        >
+          GitHub でログイン
+        </a>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* ヘッダー */}
       <header className="bg-white border-b px-6 py-4 flex items-center justify-between">
         <h1 className="text-xl font-bold">OmniVOC Dashboard</h1>
-        <button
-          onClick={() => setShowProjectModal(true)}
-          className="bg-black text-white px-4 py-2 rounded text-sm hover:bg-gray-800"
-        >
-          + プロジェクト登録
-        </button>
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2 text-sm text-gray-600">
+            {authUser.avatar && (
+              <img src={authUser.avatar} alt="" className="w-6 h-6 rounded-full" />
+            )}
+            {authUser.user}
+          </div>
+          <button
+            onClick={handleLogout}
+            className="text-sm text-gray-500 hover:text-gray-800"
+          >
+            ログアウト
+          </button>
+          <button
+            onClick={() => setShowProjectModal(true)}
+            className="bg-black text-white px-4 py-2 rounded text-sm hover:bg-gray-800"
+          >
+            + プロジェクト登録
+          </button>
+        </div>
       </header>
 
       {/* プロジェクト一覧 */}

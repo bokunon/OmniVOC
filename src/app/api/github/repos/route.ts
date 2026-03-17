@@ -13,7 +13,7 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const octokit = createOctokit();
+    const octokit = await createOctokit();
     const [owner, repo] = repoFullName.split("/");
     const { data } = await octokit.rest.repos.get({ owner, repo });
 

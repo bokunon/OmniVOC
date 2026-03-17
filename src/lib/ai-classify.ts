@@ -31,7 +31,7 @@ export async function classifyFeedback(
     };
   }
 
-  const octokit = createOctokit();
+  const octokit = await createOctokit();
   const issues = await fetchOpenIssues(octokit, repoFullName);
 
   if (issues.length === 0) {

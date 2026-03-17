@@ -1,9 +1,16 @@
 import { Octokit } from "octokit";
+import { getSession } from "./session";
 
-export function createOctokit() {
-  const token = process.env.GITHUB_TOKEN;
+export function createOctokitWithToken(token: string) {
+  return new Octokit({ auth: token });
+}
+
+export async function createOctokit() {
+  // OAuth トークンを優先、なければ固定トークンにフォールバック
+  const session = await getSession();
+  const token = session?.github_token || process.env.GITHUB_TOKEN;
   if (!token) {
-    throw new Error("Missing GITHUB_TOKEN environment variable");
+    throw new Error("Not authenticated. Please login with GitHub.");
   }
   return new Octokit({ auth: token });
 }
