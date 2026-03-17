@@ -86,19 +86,23 @@
       "</div>";
     document.body.appendChild(pc);
 
-    var pcTextarea = pc.querySelector("textarea");
-    var pcSend = pc.querySelector(".send");
+    var pcTextarea, pcSend;
 
-    pcTextarea.addEventListener("focus", function () {
-      pcSend.classList.add("show");
-    });
-    pcTextarea.addEventListener("blur", function () {
-      setTimeout(function () {
-        if (!pcTextarea.value.trim()) pcSend.classList.remove("show");
-      }, 200);
-    });
+    function bindPcEvents() {
+      pcTextarea = pc.querySelector("textarea");
+      pcSend = pc.querySelector(".send");
+      pcTextarea.addEventListener("focus", function () {
+        pcSend.classList.add("show");
+      });
+      pcTextarea.addEventListener("blur", function () {
+        setTimeout(function () {
+          if (!pcTextarea.value.trim()) pcSend.classList.remove("show");
+        }, 200);
+      });
+      pcSend.addEventListener("click", handlePcSubmit);
+    }
 
-    pcSend.addEventListener("click", function () {
+    function handlePcSubmit() {
       var content = pcTextarea.value.trim();
       if (!content) return;
       pcSend.disabled = true;
@@ -112,17 +116,7 @@
             pc.querySelector(".bar").innerHTML =
               '<textarea placeholder="' + label + '"></textarea>' +
               '<button class="send">' + t.submit + "</button>";
-            pcTextarea = pc.querySelector("textarea");
-            pcSend = pc.querySelector(".send");
-            pcTextarea.addEventListener("focus", function () {
-              pcSend.classList.add("show");
-            });
-            pcTextarea.addEventListener("blur", function () {
-              setTimeout(function () {
-                if (!pcTextarea.value.trim()) pcSend.classList.remove("show");
-              }, 200);
-            });
-            pcSend.addEventListener("click", arguments.callee);
+            bindPcEvents();
           }, 2000);
         },
         function () {
@@ -130,7 +124,9 @@
           pcSend.textContent = t.error;
         }
       );
-    });
+    }
+
+    bindPcEvents();
   } else {
     /* === モバイル === */
     var mobBtn = document.createElement("button");
