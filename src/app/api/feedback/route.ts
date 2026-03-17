@@ -2,6 +2,16 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
 import { classifyFeedback } from "@/lib/ai-classify";
 
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type",
+};
+
+export async function OPTIONS() {
+  return new NextResponse(null, { status: 200, headers: corsHeaders });
+}
+
 export async function POST(request: NextRequest) {
   const body = await request.json();
   const { project_key, channel, content, sender_id, sender_name, metadata } =
@@ -10,7 +20,7 @@ export async function POST(request: NextRequest) {
   if (!project_key || !channel || !content) {
     return NextResponse.json(
       { error: "project_key, channel, content are required" },
-      { status: 400 }
+      { status: 400, headers: corsHeaders }
     );
   }
 
@@ -26,7 +36,7 @@ export async function POST(request: NextRequest) {
   if (projectError || !project) {
     return NextResponse.json(
       { error: `Project not found: ${project_key}` },
-      { status: 404 }
+      { status: 404, headers: corsHeaders }
     );
   }
 
@@ -48,7 +58,7 @@ export async function POST(request: NextRequest) {
   if (insertError || !feedback) {
     return NextResponse.json(
       { error: "Failed to save feedback" },
-      { status: 500 }
+      { status: 500, headers: corsHeaders }
     );
   }
 
@@ -83,6 +93,6 @@ export async function POST(request: NextRequest) {
       status: "auto_new",
       message: "Feedback received. AI classification in progress.",
     },
-    { status: 201 }
+    { status: 201, headers: corsHeaders }
   );
 }
