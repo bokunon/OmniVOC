@@ -7,92 +7,60 @@
   var projectKey = script.getAttribute("data-project-key");
   var apiBase = script.src.replace(/\/widget\.js.*$/, "");
   var lang = script.getAttribute("data-lang") || document.documentElement.lang || "ja";
+  var customMessage = script.getAttribute("data-message");
 
   if (!projectKey) {
     console.error("[OmniVOC] data-project-key is required");
     return;
   }
 
-  // i18n
   var i18n = {
     ja: {
-      title: "フィードバックを送る",
-      placeholder: "ご意見・ご要望をお聞かせください",
+      placeholder: "バグ報告/追加要望",
       submit: "送信",
       sending: "送信中...",
-      thanks: "ありがとうございます！<br>フィードバックを受け付けました。",
-      error: "送信失敗。もう一度お試しください",
-      tooltip: "フィードバックを送る",
+      thanks: "ありがとうございます！",
+      error: "送信失敗",
+      mobileBtn: "バグ報告/追加要望",
     },
     en: {
-      title: "Send Feedback",
-      placeholder: "Share your thoughts or suggestions",
+      placeholder: "Bug Report / Feature Request",
       submit: "Submit",
       sending: "Sending...",
-      thanks: "Thank you!<br>Your feedback has been received.",
-      error: "Failed to send. Please try again.",
-      tooltip: "Send feedback",
+      thanks: "Thank you!",
+      error: "Failed to send",
+      mobileBtn: "Bug Report / Feature Request",
     },
   };
   var t = i18n[lang] || i18n.en;
+  var label = customMessage || t.placeholder;
+  var isMobile = window.innerWidth < 768;
 
-  // スタイル
   var style = document.createElement("style");
   style.textContent =
-    "#omnivoc-btn{position:fixed;bottom:24px;right:24px;width:56px;height:56px;border-radius:50%;background:#000;color:#fff;border:none;cursor:pointer;font-size:24px;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 12px rgba(0,0,0,.15);z-index:99999;transition:transform .2s}" +
-    "#omnivoc-btn:hover{transform:scale(1.1)}" +
-    "#omnivoc-panel{position:fixed;bottom:96px;right:24px;width:360px;max-width:calc(100vw - 48px);background:#fff;border-radius:12px;box-shadow:0 8px 30px rgba(0,0,0,.12);z-index:99999;font-family:system-ui,-apple-system,sans-serif;display:none}" +
-    "#omnivoc-panel.open{display:block}" +
-    "#omnivoc-panel header{padding:16px;border-bottom:1px solid #eee;font-weight:600;font-size:14px}" +
-    "#omnivoc-panel .body{padding:16px}" +
-    "#omnivoc-panel textarea{width:100%;height:120px;border:1px solid #ddd;border-radius:8px;padding:12px;font-size:14px;resize:vertical;box-sizing:border-box}" +
-    "#omnivoc-panel textarea:focus{outline:none;border-color:#000}" +
-    "#omnivoc-panel button.submit{width:100%;margin-top:12px;padding:10px;background:#000;color:#fff;border:none;border-radius:8px;font-size:14px;cursor:pointer}" +
-    "#omnivoc-panel button.submit:hover{background:#333}" +
-    "#omnivoc-panel button.submit:disabled{opacity:.5;cursor:default}" +
-    "#omnivoc-panel .thanks{text-align:center;padding:24px;color:#666;font-size:14px}";
+    /* PC: 常時テキストボックス */
+    "#omnivoc-pc{position:fixed;bottom:24px;right:24px;width:340px;z-index:99999;font-family:system-ui,-apple-system,sans-serif}" +
+    "#omnivoc-pc .bar{display:flex;gap:8px;align-items:stretch}" +
+    "#omnivoc-pc textarea{flex:1;border:1px solid #ddd;border-radius:8px;padding:10px 12px;font-size:13px;resize:none;height:42px;box-sizing:border-box;transition:height .2s}" +
+    "#omnivoc-pc textarea:focus{outline:none;border-color:#000;height:80px}" +
+    "#omnivoc-pc .send{background:#000;color:#fff;border:none;border-radius:8px;padding:0 16px;font-size:13px;cursor:pointer;white-space:nowrap;opacity:0;transition:opacity .2s;pointer-events:none}" +
+    "#omnivoc-pc .send.show{opacity:1;pointer-events:auto}" +
+    "#omnivoc-pc .send:hover{background:#333}" +
+    "#omnivoc-pc .send:disabled{opacity:.5}" +
+    "#omnivoc-pc .msg{text-align:center;padding:8px;font-size:12px;color:#666}" +
+    /* モバイル: 文言ボタン → 展開 */
+    "#omnivoc-mob-btn{position:fixed;bottom:24px;right:24px;background:#000;color:#fff;border:none;border-radius:24px;padding:10px 20px;font-size:13px;cursor:pointer;z-index:99999;font-family:system-ui,-apple-system,sans-serif;box-shadow:0 4px 12px rgba(0,0,0,.15)}" +
+    "#omnivoc-mob-panel{position:fixed;bottom:24px;right:24px;left:24px;background:#fff;border-radius:12px;box-shadow:0 8px 30px rgba(0,0,0,.12);z-index:99999;font-family:system-ui,-apple-system,sans-serif;display:none;padding:16px}" +
+    "#omnivoc-mob-panel.open{display:block}" +
+    "#omnivoc-mob-panel textarea{width:100%;height:80px;border:1px solid #ddd;border-radius:8px;padding:10px;font-size:14px;resize:none;box-sizing:border-box;margin-bottom:8px}" +
+    "#omnivoc-mob-panel textarea:focus{outline:none;border-color:#000}" +
+    "#omnivoc-mob-panel .actions{display:flex;gap:8px}" +
+    "#omnivoc-mob-panel .send{flex:1;background:#000;color:#fff;border:none;border-radius:8px;padding:10px;font-size:14px;cursor:pointer}" +
+    "#omnivoc-mob-panel .cancel{flex:0;background:#eee;color:#333;border:none;border-radius:8px;padding:10px 16px;font-size:14px;cursor:pointer}" +
+    "#omnivoc-mob-panel .msg{text-align:center;padding:8px;font-size:13px;color:#666}";
   document.head.appendChild(style);
 
-  // ボタン
-  var btn = document.createElement("button");
-  btn.id = "omnivoc-btn";
-  btn.innerHTML = "&#9993;";
-  btn.title = t.tooltip;
-  document.body.appendChild(btn);
-
-  // パネル
-  var panel = document.createElement("div");
-  panel.id = "omnivoc-panel";
-  document.body.appendChild(panel);
-
-  function renderForm() {
-    panel.innerHTML =
-      "<header>" + t.title + "</header>" +
-      '<div class="body">' +
-      '<textarea id="omnivoc-input" placeholder="' + t.placeholder + '"></textarea>' +
-      '<button class="submit" id="omnivoc-submit">' + t.submit + "</button>" +
-      "</div>";
-    document.getElementById("omnivoc-submit").addEventListener("click", handleSubmit);
-  }
-
-  renderForm();
-
-  var isOpen = false;
-  btn.addEventListener("click", function () {
-    isOpen = !isOpen;
-    panel.className = isOpen ? "open" : "";
-    btn.innerHTML = isOpen ? "&#10005;" : "&#9993;";
-  });
-
-  function handleSubmit() {
-    var input = document.getElementById("omnivoc-input");
-    var submitBtn = document.getElementById("omnivoc-submit");
-    var content = input.value.trim();
-    if (!content) return;
-
-    submitBtn.disabled = true;
-    submitBtn.textContent = t.sending;
-
+  function postFeedback(content, onSuccess, onError) {
     fetch(apiBase + "/api/feedback", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -100,26 +68,123 @@
         project_key: projectKey,
         channel: "web",
         content: content,
+        source_url: window.location.href,
       }),
     })
-      .then(function (res) {
-        if (res.ok) {
-          panel.querySelector(".body").innerHTML =
-            '<div class="thanks">' + t.thanks + "</div>";
+      .then(function (res) { res.ok ? onSuccess() : onError(); })
+      .catch(onError);
+  }
+
+  if (!isMobile) {
+    /* === PC === */
+    var pc = document.createElement("div");
+    pc.id = "omnivoc-pc";
+    pc.innerHTML =
+      '<div class="bar">' +
+      '<textarea placeholder="' + label + '"></textarea>' +
+      '<button class="send">' + t.submit + "</button>" +
+      "</div>";
+    document.body.appendChild(pc);
+
+    var pcTextarea = pc.querySelector("textarea");
+    var pcSend = pc.querySelector(".send");
+
+    pcTextarea.addEventListener("focus", function () {
+      pcSend.classList.add("show");
+    });
+    pcTextarea.addEventListener("blur", function () {
+      setTimeout(function () {
+        if (!pcTextarea.value.trim()) pcSend.classList.remove("show");
+      }, 200);
+    });
+
+    pcSend.addEventListener("click", function () {
+      var content = pcTextarea.value.trim();
+      if (!content) return;
+      pcSend.disabled = true;
+      pcSend.textContent = t.sending;
+      postFeedback(
+        content,
+        function () {
+          pc.querySelector(".bar").innerHTML =
+            '<div class="msg">' + t.thanks + "</div>";
           setTimeout(function () {
-            isOpen = false;
-            panel.className = "";
-            btn.innerHTML = "&#9993;";
-            renderForm();
+            pc.querySelector(".bar").innerHTML =
+              '<textarea placeholder="' + label + '"></textarea>' +
+              '<button class="send">' + t.submit + "</button>";
+            pcTextarea = pc.querySelector("textarea");
+            pcSend = pc.querySelector(".send");
+            pcTextarea.addEventListener("focus", function () {
+              pcSend.classList.add("show");
+            });
+            pcTextarea.addEventListener("blur", function () {
+              setTimeout(function () {
+                if (!pcTextarea.value.trim()) pcSend.classList.remove("show");
+              }, 200);
+            });
+            pcSend.addEventListener("click", arguments.callee);
           }, 2000);
-        } else {
-          submitBtn.disabled = false;
-          submitBtn.textContent = t.error;
+        },
+        function () {
+          pcSend.disabled = false;
+          pcSend.textContent = t.error;
         }
-      })
-      .catch(function () {
-        submitBtn.disabled = false;
-        submitBtn.textContent = t.error;
-      });
+      );
+    });
+  } else {
+    /* === モバイル === */
+    var mobBtn = document.createElement("button");
+    mobBtn.id = "omnivoc-mob-btn";
+    mobBtn.textContent = customMessage || t.mobileBtn;
+    document.body.appendChild(mobBtn);
+
+    var mobPanel = document.createElement("div");
+    mobPanel.id = "omnivoc-mob-panel";
+    document.body.appendChild(mobPanel);
+
+    function renderMobForm() {
+      mobPanel.innerHTML =
+        '<textarea placeholder="' + label + '"></textarea>' +
+        '<div class="actions">' +
+        '<button class="cancel">x</button>' +
+        '<button class="send">' + t.submit + "</button>" +
+        "</div>";
+      mobPanel.querySelector(".cancel").addEventListener("click", closeMob);
+      mobPanel.querySelector(".send").addEventListener("click", submitMob);
+    }
+
+    function openMob() {
+      mobBtn.style.display = "none";
+      mobPanel.className = "open";
+      renderMobForm();
+      mobPanel.querySelector("textarea").focus();
+    }
+
+    function closeMob() {
+      mobPanel.className = "";
+      mobBtn.style.display = "";
+    }
+
+    function submitMob() {
+      var ta = mobPanel.querySelector("textarea");
+      var btn = mobPanel.querySelector(".send");
+      var content = ta.value.trim();
+      if (!content) return;
+      btn.disabled = true;
+      btn.textContent = t.sending;
+      postFeedback(
+        content,
+        function () {
+          mobPanel.innerHTML = '<div class="msg">' + t.thanks + "</div>";
+          setTimeout(closeMob, 2000);
+        },
+        function () {
+          btn.disabled = false;
+          btn.textContent = t.error;
+        }
+      );
+    }
+
+    mobBtn.addEventListener("click", openMob);
   }
 })();

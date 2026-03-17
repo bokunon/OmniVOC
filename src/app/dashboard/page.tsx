@@ -21,6 +21,7 @@ interface Feedback {
   suggested_issue_url: string | null;
   reviewed: boolean;
   sender_name: string | null;
+  source_url: string | null;
   created_at: string;
   projects: {
     display_name: string;
@@ -32,10 +33,7 @@ interface Feedback {
 const STATUS_LABELS: Record<string, { label: string; color: string }> = {
   auto_new: { label: "新規", color: "bg-blue-100 text-blue-800" },
   auto_linked: { label: "AI: 類似", color: "bg-yellow-100 text-yellow-800" },
-  auto_resolved: {
-    label: "AI: 対応済",
-    color: "bg-gray-100 text-gray-800",
-  },
+  auto_resolved: { label: "AI: 対応済", color: "bg-gray-100 text-gray-800" },
   ticketed: { label: "チケット化済", color: "bg-green-100 text-green-800" },
   resolved: { label: "解決済み", color: "bg-gray-200 text-gray-600" },
 };
@@ -56,7 +54,7 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
 
-  // モーダル
+  // チケット化モーダル
   const [ticketModal, setTicketModal] = useState<{
     feedbackIds: string[];
     content: string;
@@ -64,18 +62,21 @@ export default function DashboardPage() {
   } | null>(null);
   const [ticketTitle, setTicketTitle] = useState("");
   const [ticketBody, setTicketBody] = useState("");
+  const [generating, setGenerating] = useState(false);
 
   // プロジェクト登録モーダル
   const [showProjectModal, setShowProjectModal] = useState(false);
+  const [newProjectRepoUrl, setNewProjectRepoUrl] = useState("");
   const [newProjectName, setNewProjectName] = useState("");
-  const [newProjectRepo, setNewProjectRepo] = useState("");
+  const [repoChecking, setRepoChecking] = useState(false);
+  const [repoError, setRepoError] = useState("");
+  const [repoVerified, setRepoVerified] = useState(false);
 
   const fetchFeedbacks = useCallback(async () => {
     const params = new URLSearchParams();
     if (filterProject) params.set("project_id", filterProject);
     if (filterStatus) params.set("status", filterStatus);
     if (filterChannel) params.set("channel", filterChannel);
-
     const res = await fetch(`/api/feedbacks?${params}`);
     const data = await res.json();
     setFeedbacks(data);
@@ -91,7 +92,6 @@ export default function DashboardPage() {
   useEffect(() => {
     fetchProjects();
   }, []);
-
   useEffect(() => {
     fetchFeedbacks();
   }, [fetchFeedbacks]);
@@ -111,19 +111,39 @@ export default function DashboardPage() {
     setActionLoading(null);
   };
 
-  const openTicketModal = (feedbackIds: string[]) => {
+  // チケット化モーダルを開く + AI でタイトル・本文生成
+  const openTicketModal = async (feedbackIds: string[]) => {
     const selected = feedbacks.filter((f) => feedbackIds.includes(f.id));
     const content = selected.map((f) => f.content).join("\n\n---\n\n");
     const repoFullName = selected[0]?.projects?.repo_full_name || "";
     setTicketModal({ feedbackIds, content, repoFullName });
     setTicketTitle("");
     setTicketBody(content);
+
+    // AI 生成
+    setGenerating(true);
+    try {
+      const url =
+        feedbackIds.length === 1
+          ? `/api/feedbacks/${feedbackIds[0]}/generate-issue`
+          : "/api/feedbacks/generate-issue-bulk";
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ feedback_ids: feedbackIds }),
+      });
+      const data = await res.json();
+      setTicketTitle(data.title || "");
+      setTicketBody(data.body || content);
+    } catch {
+      // フォールバック: 元のコンテンツのまま
+    }
+    setGenerating(false);
   };
 
   const handleTicketize = async () => {
     if (!ticketModal) return;
     setActionLoading("ticketize");
-
     if (ticketModal.feedbackIds.length === 1) {
       await fetch(`/api/feedbacks/${ticketModal.feedbackIds[0]}/ticketize`, {
         method: "POST",
@@ -146,26 +166,86 @@ export default function DashboardPage() {
         }),
       });
     }
-
     setTicketModal(null);
     setSelectedIds(new Set());
     await fetchFeedbacks();
     setActionLoading(null);
   };
 
+  // プロジェクト登録: リポジトリ URL → 解析
+  const parseRepoFullName = (url: string): string | null => {
+    // https://github.com/owner/repo or owner/repo
+    const match = url.match(
+      /(?:https?:\/\/github\.com\/)?([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+)/
+    );
+    return match ? match[1].replace(/\.git$/, "") : null;
+  };
+
+  const handleCheckRepo = async () => {
+    setRepoError("");
+    setRepoVerified(false);
+    const repoFullName = parseRepoFullName(newProjectRepoUrl);
+    if (!repoFullName) {
+      setRepoError("リポジトリ URL の形式が正しくありません");
+      return;
+    }
+    setRepoChecking(true);
+    try {
+      const res = await fetch(
+        `/api/github/repos?repo=${encodeURIComponent(repoFullName)}`
+      );
+      if (!res.ok) {
+        setRepoError(
+          "リポジトリにアクセスできません。URL と権限を確認してください。"
+        );
+        setRepoChecking(false);
+        return;
+      }
+      const data = await res.json();
+      setNewProjectName(data.name);
+      setRepoVerified(true);
+      if (!data.has_issues) {
+        setRepoError("このリポジトリは Issues が無効です");
+        setRepoVerified(false);
+      }
+    } catch {
+      setRepoError("確認中にエラーが発生しました");
+    }
+    setRepoChecking(false);
+  };
+
   const handleCreateProject = async () => {
-    if (!newProjectName) return;
-    await fetch("/api/projects", {
+    const repoFullName = parseRepoFullName(newProjectRepoUrl);
+    if (!repoFullName || !repoVerified) return;
+    const res = await fetch("/api/projects", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         display_name: newProjectName,
-        repo_full_name: newProjectRepo || null,
+        repo_full_name: repoFullName,
       }),
     });
+    if (!res.ok) {
+      const data = await res.json();
+      setRepoError(data.error || "登録に失敗しました");
+      return;
+    }
     setShowProjectModal(false);
+    setNewProjectRepoUrl("");
     setNewProjectName("");
-    setNewProjectRepo("");
+    setRepoVerified(false);
+    setRepoError("");
+    await fetchProjects();
+  };
+
+  const handleDeleteProject = async (id: string, name: string) => {
+    if (!confirm(`「${name}」を削除しますか？`)) return;
+    const res = await fetch(`/api/projects/${id}`, { method: "DELETE" });
+    if (!res.ok) {
+      const data = await res.json();
+      alert(data.error || "削除に失敗しました");
+      return;
+    }
     await fetchProjects();
   };
 
@@ -190,6 +270,28 @@ export default function DashboardPage() {
           + プロジェクト登録
         </button>
       </header>
+
+      {/* プロジェクト一覧 */}
+      {projects.length > 0 && (
+        <div className="px-6 py-3 flex gap-2 flex-wrap">
+          {projects.map((p) => (
+            <div
+              key={p.id}
+              className="bg-white border rounded px-3 py-1.5 text-xs flex items-center gap-2"
+            >
+              <span className="font-medium">{p.display_name}</span>
+              <span className="text-gray-400">{p.repo_full_name}</span>
+              <button
+                onClick={() => handleDeleteProject(p.id, p.display_name)}
+                className="text-red-400 hover:text-red-600"
+                title="削除"
+              >
+                x
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* フィルター */}
       <div className="px-6 py-4 flex gap-4 items-center flex-wrap">
@@ -233,7 +335,6 @@ export default function DashboardPage() {
         >
           更新
         </button>
-
         {selectedIds.size > 0 && (
           <button
             onClick={() => openTicketModal(Array.from(selectedIds))}
@@ -272,7 +373,6 @@ export default function DashboardPage() {
                       className="mt-1"
                     />
                     <div className="flex-1 min-w-0">
-                      {/* 上段: メタ情報 */}
                       <div className="flex items-center gap-2 mb-2 flex-wrap">
                         <span
                           className={`px-2 py-0.5 rounded text-xs font-medium ${statusInfo.color}`}
@@ -300,10 +400,22 @@ export default function DashboardPage() {
                         )}
                       </div>
 
-                      {/* 本文 */}
                       <p className="text-sm text-gray-800 mb-2">{fb.content}</p>
 
-                      {/* AI 判定情報 */}
+                      {/* 送信元 URL */}
+                      {fb.source_url && (
+                        <div className="text-xs text-gray-400 mb-2">
+                          <a
+                            href={fb.source_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-blue-500 hover:underline"
+                          >
+                            {fb.source_url}
+                          </a>
+                        </div>
+                      )}
+
                       {fb.ai_reason && (
                         <div className="text-xs text-gray-500 mb-2">
                           AI:{" "}
@@ -319,14 +431,16 @@ export default function DashboardPage() {
                                 rel="noopener noreferrer"
                                 className="text-blue-600 hover:underline"
                               >
-                                {fb.suggested_issue_url.split("/").slice(-2).join(" #")}
+                                {fb.suggested_issue_url
+                                  .split("/")
+                                  .slice(-2)
+                                  .join(" #")}
                               </a>
                             </>
                           )}
                         </div>
                       )}
 
-                      {/* アクションボタン */}
                       {!fb.reviewed && (
                         <div className="flex gap-2">
                           {(fb.status === "auto_linked" ||
@@ -372,6 +486,11 @@ export default function DashboardPage() {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-6 w-full max-w-lg mx-4">
             <h2 className="text-lg font-bold mb-4">GitHub Issue を作成</h2>
+            {generating && (
+              <p className="text-sm text-gray-500 mb-3">
+                AI がタイトル・本文を生成中...
+              </p>
+            )}
             <div className="space-y-3">
               <div>
                 <label className="block text-sm font-medium mb-1">
@@ -398,8 +517,9 @@ export default function DashboardPage() {
                   type="text"
                   value={ticketTitle}
                   onChange={(e) => setTicketTitle(e.target.value)}
-                  placeholder="Issue タイトル"
+                  placeholder={generating ? "生成中..." : "Issue タイトル"}
                   className="w-full border rounded px-3 py-2 text-sm"
+                  disabled={generating}
                 />
               </div>
               <div>
@@ -409,6 +529,7 @@ export default function DashboardPage() {
                   onChange={(e) => setTicketBody(e.target.value)}
                   rows={6}
                   className="w-full border rounded px-3 py-2 text-sm"
+                  disabled={generating}
                 />
               </div>
             </div>
@@ -424,7 +545,8 @@ export default function DashboardPage() {
                 disabled={
                   !ticketTitle ||
                   !ticketModal.repoFullName ||
-                  actionLoading === "ticketize"
+                  actionLoading === "ticketize" ||
+                  generating
                 }
                 className="px-4 py-2 text-sm bg-black text-white rounded hover:bg-gray-800 disabled:opacity-50"
               >
@@ -443,39 +565,67 @@ export default function DashboardPage() {
             <div className="space-y-3">
               <div>
                 <label className="block text-sm font-medium mb-1">
-                  プロジェクト名
+                  GitHub リポジトリ URL
                 </label>
-                <input
-                  type="text"
-                  value={newProjectName}
-                  onChange={(e) => setNewProjectName(e.target.value)}
-                  placeholder="例: PreTalk"
-                  className="w-full border rounded px-3 py-2 text-sm"
-                />
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={newProjectRepoUrl}
+                    onChange={(e) => {
+                      setNewProjectRepoUrl(e.target.value);
+                      setRepoVerified(false);
+                      setRepoError("");
+                    }}
+                    placeholder="https://github.com/owner/repo"
+                    className="flex-1 border rounded px-3 py-2 text-sm"
+                  />
+                  <button
+                    onClick={handleCheckRepo}
+                    disabled={!newProjectRepoUrl || repoChecking}
+                    className="px-4 py-2 text-sm border rounded hover:bg-gray-50 disabled:opacity-50"
+                  >
+                    {repoChecking ? "確認中..." : "確認"}
+                  </button>
+                </div>
+                {repoError && (
+                  <p className="text-xs text-red-600 mt-1">{repoError}</p>
+                )}
+                {repoVerified && !repoError && (
+                  <p className="text-xs text-green-600 mt-1">
+                    リポジトリを確認しました
+                  </p>
+                )}
               </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">
-                  GitHub リポジトリ（任意）
-                </label>
-                <input
-                  type="text"
-                  value={newProjectRepo}
-                  onChange={(e) => setNewProjectRepo(e.target.value)}
-                  placeholder="owner/repo"
-                  className="w-full border rounded px-3 py-2 text-sm"
-                />
-              </div>
+              {repoVerified && (
+                <div>
+                  <label className="block text-sm font-medium mb-1">
+                    表示名
+                  </label>
+                  <input
+                    type="text"
+                    value={newProjectName}
+                    onChange={(e) => setNewProjectName(e.target.value)}
+                    className="w-full border rounded px-3 py-2 text-sm"
+                  />
+                </div>
+              )}
             </div>
             <div className="flex justify-end gap-2 mt-4">
               <button
-                onClick={() => setShowProjectModal(false)}
+                onClick={() => {
+                  setShowProjectModal(false);
+                  setNewProjectRepoUrl("");
+                  setNewProjectName("");
+                  setRepoVerified(false);
+                  setRepoError("");
+                }}
                 className="px-4 py-2 text-sm border rounded hover:bg-gray-50"
               >
                 キャンセル
               </button>
               <button
                 onClick={handleCreateProject}
-                disabled={!newProjectName}
+                disabled={!repoVerified || !newProjectName}
                 className="px-4 py-2 text-sm bg-black text-white rounded hover:bg-gray-800 disabled:opacity-50"
               >
                 登録

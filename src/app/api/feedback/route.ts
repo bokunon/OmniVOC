@@ -14,8 +14,15 @@ export async function OPTIONS() {
 
 export async function POST(request: NextRequest) {
   const body = await request.json();
-  const { project_key, channel, content, sender_id, sender_name, metadata } =
-    body;
+  const {
+    project_key,
+    channel,
+    content,
+    sender_id,
+    sender_name,
+    metadata,
+    source_url,
+  } = body;
 
   if (!project_key || !channel || !content) {
     return NextResponse.json(
@@ -26,7 +33,6 @@ export async function POST(request: NextRequest) {
 
   const supabase = createServiceClient();
 
-  // project_key でプロジェクトを検索
   const { data: project, error: projectError } = await supabase
     .from("projects")
     .select("id, repo_full_name")
@@ -40,7 +46,6 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // フィードバックを保存（まず auto_new で保存）
   const { data: feedback, error: insertError } = await supabase
     .from("feedbacks")
     .insert({
@@ -51,6 +56,7 @@ export async function POST(request: NextRequest) {
       sender_id: sender_id ?? null,
       sender_name: sender_name ?? null,
       metadata: metadata ?? null,
+      source_url: source_url ?? null,
     })
     .select("id")
     .single();
@@ -62,7 +68,6 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // AI 分類を非同期で実行（レスポンスは先に返す）
   classifyFeedback(content, project.repo_full_name)
     .then(async (classification) => {
       await supabase
@@ -77,7 +82,6 @@ export async function POST(request: NextRequest) {
         .eq("id", feedback.id);
     })
     .catch(async () => {
-      // AI 分類失敗時は auto_new のまま
       await supabase
         .from("feedbacks")
         .update({
