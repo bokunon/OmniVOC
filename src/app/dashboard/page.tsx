@@ -44,6 +44,19 @@ const CHANNEL_LABELS: Record<string, string> = {
   line: "LINE",
 };
 
+function generateIssueBody(fb: Feedback): string {
+  let body = `## ユーザーフィードバック\n\n${fb.content}`;
+  body += `\n\n## メタ情報\n- チャネル: ${fb.channel}`;
+  if (fb.source_url) body += `\n- 送信元: ${fb.source_url}`;
+  if (fb.sender_name) body += `\n- 送信者: ${fb.sender_name}`;
+  body += `\n- 受信日: ${new Date(fb.created_at).toLocaleDateString("ja-JP")}`;
+  return body;
+}
+
+function generateIssueTitle(fb: Feedback): string {
+  return fb.content.slice(0, 60) + (fb.content.length > 60 ? "..." : "");
+}
+
 export default function DashboardPage() {
   const [authUser, setAuthUser] = useState<{ user: string; avatar: string } | null>(null);
   const [authChecked, setAuthChecked] = useState(false);
@@ -56,7 +69,7 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
 
-  // チケット化モーダル
+  // チケット化モーダル（まとめて用）
   const [ticketModal, setTicketModal] = useState<{
     feedbackIds: string[];
     content: string;
@@ -64,7 +77,6 @@ export default function DashboardPage() {
   } | null>(null);
   const [ticketTitle, setTicketTitle] = useState("");
   const [ticketBody, setTicketBody] = useState("");
-  const [generating, setGenerating] = useState(false);
 
   // プロジェクト登録モーダル
   const [showProjectModal, setShowProjectModal] = useState(false);
@@ -124,34 +136,26 @@ export default function DashboardPage() {
     setActionLoading(null);
   };
 
-  // チケット化モーダルを開く + AI でタイトル・本文生成
-  const openTicketModal = async (feedbackIds: string[]) => {
+  // 単体チケット化（モーダルあり）
+  const openTicketModal = (feedbackIds: string[]) => {
     const selected = feedbacks.filter((f) => feedbackIds.includes(f.id));
-    const content = selected.map((f) => f.content).join("\n\n---\n\n");
     const repoFullName = selected[0]?.projects?.repo_full_name || "";
-    setTicketModal({ feedbackIds, content, repoFullName });
-    setTicketTitle("");
-    setTicketBody(content);
 
-    // AI 生成
-    setGenerating(true);
-    try {
-      const url =
-        feedbackIds.length === 1
-          ? `/api/feedbacks/${feedbackIds[0]}/generate-issue`
-          : "/api/feedbacks/generate-issue-bulk";
-      const res = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ feedback_ids: feedbackIds }),
-      });
-      const data = await res.json();
-      setTicketTitle(data.title || "");
-      setTicketBody(data.body || content);
-    } catch {
-      // フォールバック: 元のコンテンツのまま
+    if (selected.length === 1) {
+      const fb = selected[0];
+      setTicketTitle(generateIssueTitle(fb));
+      setTicketBody(generateIssueBody(fb));
+    } else {
+      const content = selected.map((f) => f.content).join("\n\n---\n\n");
+      setTicketTitle(`ユーザーフィードバック (${selected.length}件)`);
+      setTicketBody(`## ユーザーフィードバック\n\n${content}`);
     }
-    setGenerating(false);
+
+    setTicketModal({
+      feedbackIds,
+      content: selected.map((f) => f.content).join("\n\n"),
+      repoFullName,
+    });
   };
 
   const handleTicketize = async () => {
@@ -185,9 +189,46 @@ export default function DashboardPage() {
     setActionLoading(null);
   };
 
-  // プロジェクト登録: リポジトリ URL → 解析
+  // バラバラにチケット化（確認なし、テンプレート自動生成で即実行）
+  const handleTicketizeEach = async () => {
+    const selected = feedbacks.filter((f) => selectedIds.has(f.id));
+    if (selected.length === 0) return;
+    if (
+      !confirm(
+        `${selected.length}件を個別にチケット化します。よろしいですか？`
+      )
+    )
+      return;
+
+    setActionLoading("ticketize-each");
+    for (const fb of selected) {
+      const repoFullName = fb.projects?.repo_full_name;
+      if (!repoFullName) continue;
+      await fetch(`/api/feedbacks/${fb.id}/ticketize`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          repo_full_name: repoFullName,
+          title: generateIssueTitle(fb),
+          issue_body: generateIssueBody(fb),
+        }),
+      });
+    }
+    setSelectedIds(new Set());
+    await fetchFeedbacks();
+    setActionLoading(null);
+  };
+
+  // 新規を全選択
+  const selectAllNew = () => {
+    const newIds = feedbacks
+      .filter((f) => f.status === "auto_new")
+      .map((f) => f.id);
+    setSelectedIds(new Set(newIds));
+  };
+
+  // プロジェクト登録
   const parseRepoFullName = (url: string): string | null => {
-    // https://github.com/owner/repo or owner/repo
     const match = url.match(
       /(?:https?:\/\/github\.com\/)?([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+)/
     );
@@ -305,9 +346,10 @@ export default function DashboardPage() {
     );
   }
 
+  const newCount = feedbacks.filter((f) => f.status === "auto_new").length;
+
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* ヘッダー */}
       <header className="bg-white border-b px-6 py-4 flex items-center justify-between">
         <h1 className="text-xl font-bold">OmniVOC Dashboard</h1>
         <div className="flex items-center gap-4">
@@ -332,7 +374,6 @@ export default function DashboardPage() {
         </div>
       </header>
 
-      {/* プロジェクト一覧 */}
       {projects.length > 0 && (
         <div className="px-6 py-3 flex gap-2 flex-wrap">
           {projects.map((p) => (
@@ -363,7 +404,6 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* フィルター */}
       <div className="px-6 py-4 flex gap-4 items-center flex-wrap">
         <select
           value={filterProject}
@@ -405,17 +445,37 @@ export default function DashboardPage() {
         >
           更新
         </button>
-        {selectedIds.size > 0 && (
+
+        {newCount > 0 && (
           <button
-            onClick={() => openTicketModal(Array.from(selectedIds))}
-            className="ml-auto bg-green-600 text-white px-4 py-1.5 rounded text-sm hover:bg-green-700"
+            onClick={selectAllNew}
+            className="text-sm text-gray-600 border px-3 py-1 rounded hover:bg-gray-100"
           >
-            まとめてチケット化 ({selectedIds.size}件)
+            新規を全選択 ({newCount})
           </button>
+        )}
+
+        {selectedIds.size > 0 && (
+          <div className="ml-auto flex gap-2">
+            <button
+              onClick={handleTicketizeEach}
+              disabled={actionLoading === "ticketize-each"}
+              className="bg-blue-600 text-white px-4 py-1.5 rounded text-sm hover:bg-blue-700 disabled:opacity-50"
+            >
+              {actionLoading === "ticketize-each"
+                ? "処理中..."
+                : `バラバラにチケット化 (${selectedIds.size}件)`}
+            </button>
+            <button
+              onClick={() => openTicketModal(Array.from(selectedIds))}
+              className="bg-green-600 text-white px-4 py-1.5 rounded text-sm hover:bg-green-700"
+            >
+              まとめて1件に
+            </button>
+          </div>
         )}
       </div>
 
-      {/* フィードバック一覧 */}
       <div className="px-6">
         {loading ? (
           <p className="text-gray-500 py-8 text-center">読み込み中...</p>
@@ -472,7 +532,6 @@ export default function DashboardPage() {
 
                       <p className="text-sm text-gray-800 mb-2">{fb.content}</p>
 
-                      {/* 送信元 URL */}
                       {fb.source_url && (
                         <div className="text-xs text-gray-400 mb-2">
                           <a
@@ -494,7 +553,7 @@ export default function DashboardPage() {
                           {fb.ai_reason}
                           {fb.suggested_issue_url && (
                             <>
-                              {" → "}
+                              {" -> "}
                               <a
                                 href={fb.suggested_issue_url}
                                 target="_blank"
@@ -551,16 +610,10 @@ export default function DashboardPage() {
         )}
       </div>
 
-      {/* チケット化モーダル */}
       {ticketModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-6 w-full max-w-lg mx-4">
             <h2 className="text-lg font-bold mb-4">GitHub Issue を作成</h2>
-            {generating && (
-              <p className="text-sm text-gray-500 mb-3">
-                AI がタイトル・本文を生成中...
-              </p>
-            )}
             <div className="space-y-3">
               <div>
                 <label className="block text-sm font-medium mb-1">
@@ -587,9 +640,8 @@ export default function DashboardPage() {
                   type="text"
                   value={ticketTitle}
                   onChange={(e) => setTicketTitle(e.target.value)}
-                  placeholder={generating ? "生成中..." : "Issue タイトル"}
+                  placeholder="Issue タイトル"
                   className="w-full border rounded px-3 py-2 text-sm"
-                  disabled={generating}
                 />
               </div>
               <div>
@@ -597,9 +649,8 @@ export default function DashboardPage() {
                 <textarea
                   value={ticketBody}
                   onChange={(e) => setTicketBody(e.target.value)}
-                  rows={6}
+                  rows={8}
                   className="w-full border rounded px-3 py-2 text-sm"
-                  disabled={generating}
                 />
               </div>
             </div>
@@ -615,8 +666,7 @@ export default function DashboardPage() {
                 disabled={
                   !ticketTitle ||
                   !ticketModal.repoFullName ||
-                  actionLoading === "ticketize" ||
-                  generating
+                  actionLoading === "ticketize"
                 }
                 className="px-4 py-2 text-sm bg-black text-white rounded hover:bg-gray-800 disabled:opacity-50"
               >
@@ -627,7 +677,6 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* プロジェクト登録モーダル */}
       {showProjectModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-6 w-full max-w-lg mx-4">

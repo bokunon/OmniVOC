@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
 import { createOctokit } from "@/lib/github";
-import { randomBytes } from "crypto";
 
 export async function GET() {
   const supabase = createServiceClient();
@@ -16,6 +15,26 @@ export async function GET() {
   return NextResponse.json(data);
 }
 
+async function generateProjectKey(
+  supabase: ReturnType<typeof createServiceClient>,
+  repoName: string
+): Promise<string> {
+  const base = repoName.toLowerCase().replace(/[^a-z0-9-]/g, "-");
+  let key = base;
+  let suffix = 2;
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    const { data } = await supabase
+      .from("projects")
+      .select("id")
+      .eq("project_key", key)
+      .single();
+    if (!data) return key;
+    key = `${base}-${suffix}`;
+    suffix++;
+  }
+}
+
 export async function POST(request: NextRequest) {
   const body = await request.json();
   const { display_name, repo_full_name } = body;
@@ -27,13 +46,11 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // GitHub API で認証・権限チェック
   try {
     const octokit = await createOctokit();
     const [owner, repo] = repo_full_name.split("/");
     const { data: repoData } = await octokit.rest.repos.get({ owner, repo });
 
-    // Issue 作成権限チェック（has_issues が有効 + push 権限以上）
     if (!repoData.has_issues) {
       return NextResponse.json(
         { error: "This repository has Issues disabled" },
@@ -42,9 +59,9 @@ export async function POST(request: NextRequest) {
     }
 
     const finalDisplayName = display_name || repoData.name;
-    const project_key = randomBytes(16).toString("hex");
-
     const supabase = createServiceClient();
+    const project_key = await generateProjectKey(supabase, repoData.name);
+
     const { data, error } = await supabase
       .from("projects")
       .insert({
