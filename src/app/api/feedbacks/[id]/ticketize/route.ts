@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
 import { createOctokit, createIssue } from "@/lib/github";
+import { appendNextActions } from "@/lib/issue-template";
 
 export async function POST(
   request: NextRequest,
@@ -35,7 +36,7 @@ export async function POST(
     octokit,
     repo_full_name,
     title,
-    issue_body || feedback.content
+    appendNextActions(issue_body || feedback.content)
   );
 
   // feedback_issues に紐付けを記録

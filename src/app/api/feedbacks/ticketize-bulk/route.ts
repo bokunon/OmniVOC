@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
 import { createOctokit, createIssue } from "@/lib/github";
+import { appendNextActions } from "@/lib/issue-template";
 
 export async function POST(request: NextRequest) {
   const body = await request.json();
@@ -38,8 +39,9 @@ export async function POST(request: NextRequest) {
     .map((f, i) => `${i + 1}. ${f.content}`)
     .join("\n");
 
-  const finalBody =
-    issue_body || `## ユーザーフィードバック\n\n${feedbackSummary}`;
+  const finalBody = appendNextActions(
+    issue_body || `## ユーザーフィードバック\n\n${feedbackSummary}`
+  );
 
   // GitHub Issue を作成
   const octokit = await createOctokit();
