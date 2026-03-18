@@ -162,6 +162,17 @@ export default function BoardPage() {
                   </button>
 
                   <div className="flex-1 min-w-0">
+                    {item.source_url && (
+                      <a
+                        href={item.source_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="block text-xs text-gray-400 hover:text-blue-500 truncate mb-1"
+                        title={item.source_url}
+                      >
+                        📄 {item.source_url}
+                      </a>
+                    )}
                     <p className="text-sm text-gray-800">{item.content}</p>
                     <div className="flex items-center gap-3 mt-2 text-xs text-gray-400">
                       {item.issue_url && (

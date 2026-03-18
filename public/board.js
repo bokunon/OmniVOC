@@ -66,6 +66,8 @@
     "#omnivoc-board .vote.active{background:#eff6ff;border-color:#93c5fd;color:#1d4ed8}" +
     "#omnivoc-board .vote .n{font-weight:700}" +
     "#omnivoc-board .body{flex:1;min-width:0}" +
+    "#omnivoc-board .body .src{display:block;font-size:11px;color:#9ca3af;text-decoration:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;margin-bottom:2px}" +
+    "#omnivoc-board .body .src:hover{color:#3b82f6}" +
     "#omnivoc-board .body p{font-size:14px;color:#1f2937;margin:0}" +
     "#omnivoc-board .meta{display:flex;gap:12px;margin-top:6px;font-size:12px;color:#9ca3af}" +
     "#omnivoc-board .meta a{color:#3b82f6;text-decoration:none}" +
@@ -101,7 +103,9 @@
       html += '<div class="row">';
       html += '<div class="vote' + (isVoted ? " active" : "") + '" data-vote="' + item.id + '">';
       html += "<span>" + (isVoted ? "\u25B2" : "\u25B3") + '</span><span class="n">' + item.votes + "</span></div>";
-      html += '<div class="body"><p>' + escHtml(item.content) + "</p>";
+      html += '<div class="body">';
+      if (item.source_url) html += '<a class="src" href="' + escHtml(item.source_url) + '" target="_blank" title="' + escHtml(item.source_url) + '">\uD83D\uDCC4 ' + escHtml(item.source_url) + "</a>";
+      html += "<p>" + escHtml(item.content) + "</p>";
       html += '<div class="meta">';
       if (item.issue_url) html += '<a href="' + item.issue_url + '" target="_blank">#' + item.issue_number + "</a>";
       html += '<button data-toggle="' + item.id + '">\uD83D\uDCAC ' + item.comments + "</button>";
