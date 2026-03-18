@@ -383,6 +383,15 @@ export default function DashboardPage() {
             >
               <span className="font-medium">{p.display_name}</span>
               <span className="text-gray-400">{p.repo_full_name}</span>
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(p.project_key);
+                }}
+                className="font-mono bg-gray-100 px-1.5 py-0.5 rounded hover:bg-gray-200 text-gray-700"
+                title="クリックでproject_keyをコピー"
+              >
+                {p.project_key}
+              </button>
               <a
                 href={`/board/${p.project_key}`}
                 target="_blank"
