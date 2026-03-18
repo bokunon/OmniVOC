@@ -42,6 +42,11 @@ export default function BoardPage() {
   const [commentName, setCommentName] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
+  // 新規フィードバック投稿フォーム
+  const [newText, setNewText] = useState("");
+  const [posting, setPosting] = useState(false);
+  const [postDone, setPostDone] = useState(false);
+
   const fetchItems = useCallback(async () => {
     const res = await fetch(`/api/board/${project_key}`);
     const data = await res.json();
@@ -51,10 +56,29 @@ export default function BoardPage() {
 
   useEffect(() => {
     fetchItems();
-    // ローカルの投票済みIDを復元
     const stored = localStorage.getItem(`omnivoc_votes_${project_key}`);
     if (stored) setVotedIds(new Set(JSON.parse(stored)));
   }, [fetchItems, project_key]);
+
+  const handlePost = async () => {
+    if (!newText.trim() || posting) return;
+    setPosting(true);
+    await fetch(`/api/feedback`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        project_key,
+        channel: "board",
+        content: newText.trim(),
+        source_url: window.location.href,
+      }),
+    });
+    setNewText("");
+    setPosting(false);
+    setPostDone(true);
+    setTimeout(() => setPostDone(false), 3000);
+    await fetchItems();
+  };
 
   const handleVote = async (feedbackId: string) => {
     const voterId = getVoterId();
@@ -79,7 +103,6 @@ export default function BoardPage() {
       return next;
     });
 
-    // 投票数を更新
     setItems((prev) =>
       prev
         .map((item) =>
@@ -116,7 +139,6 @@ export default function BoardPage() {
       }),
     });
     setCommentText("");
-    // リフレッシュ
     const res = await fetch(
       `/api/board/${project_key}/${expandedId}/comments`
     );
@@ -134,7 +156,35 @@ export default function BoardPage() {
         </p>
       </header>
 
-      <div className="max-w-2xl mx-auto px-4 py-6">
+      <div className="max-w-2xl mx-auto px-4 py-6 space-y-4">
+        {/* 新規投稿フォーム */}
+        <div className="bg-white border rounded-lg shadow-sm p-4">
+          <p className="text-sm font-medium text-gray-700 mb-2">新しい要望・バグ報告を追加</p>
+          <div className="flex gap-2">
+            <textarea
+              value={newText}
+              onChange={(e) => setNewText(e.target.value)}
+              placeholder="要望やバグを書いてください..."
+              rows={2}
+              className="flex-1 border rounded px-3 py-2 text-sm resize-none focus:outline-none focus:border-black"
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) handlePost();
+              }}
+            />
+            <button
+              onClick={handlePost}
+              disabled={!newText.trim() || posting}
+              className="bg-black text-white px-4 py-2 rounded text-sm hover:bg-gray-800 disabled:opacity-50 self-end"
+            >
+              {posting ? "送信中..." : "送信"}
+            </button>
+          </div>
+          {postDone && (
+            <p className="text-xs text-green-600 mt-1">送信しました！</p>
+          )}
+        </div>
+
+        {/* フィードバック一覧 */}
         {loading ? (
           <p className="text-gray-500 text-center py-8">Loading...</p>
         ) : items.length === 0 ? (
@@ -146,7 +196,6 @@ export default function BoardPage() {
             {items.map((item) => (
               <div key={item.id} className="bg-white border rounded-lg shadow-sm">
                 <div className="flex items-start gap-3 p-4">
-                  {/* 投票ボタン */}
                   <button
                     onClick={() => handleVote(item.id)}
                     className={`flex flex-col items-center min-w-[48px] py-2 px-1 rounded-lg border text-sm ${
@@ -198,7 +247,6 @@ export default function BoardPage() {
                   </div>
                 </div>
 
-                {/* コメントセクション */}
                 {expandedId === item.id && (
                   <div className="border-t px-4 py-3 bg-gray-50">
                     {comments.length > 0 && (

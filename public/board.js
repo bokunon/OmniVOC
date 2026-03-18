@@ -23,6 +23,11 @@
       name: "名前（任意）",
       addComment: "コメントを追加...",
       loading: "読み込み中...",
+      newLabel: "新しい要望・バグ報告を追加",
+      newPlaceholder: "要望やバグを書いてください...",
+      send: "送信",
+      sending: "送信中...",
+      sent: "送信しました！",
     },
     en: {
       title: "Feature Requests",
@@ -33,6 +38,11 @@
       name: "Name (optional)",
       addComment: "Add a comment...",
       loading: "Loading...",
+      newLabel: "Add a new request or bug report",
+      newPlaceholder: "Describe your request or bug...",
+      send: "Send",
+      sending: "Sending...",
+      sent: "Sent!",
     },
   };
   var t = i18n[lang] || i18n.en;
@@ -84,19 +94,71 @@
     "#omnivoc-board .cmt-form input.name{width:90px}" +
     "#omnivoc-board .cmt-form input.text{flex:1}" +
     "#omnivoc-board .cmt-form button{background:#000;color:#fff;border:none;border-radius:6px;padding:6px 12px;font-size:13px;cursor:pointer}" +
-    "#omnivoc-board .empty{text-align:center;padding:32px;color:#9ca3af;font-size:14px}";
+    "#omnivoc-board .empty{text-align:center;padding:32px;color:#9ca3af;font-size:14px}" +
+    "#omnivoc-board .new-form{background:#fff;border:1px solid #e5e7eb;border-radius:8px;padding:12px;margin-bottom:12px}" +
+    "#omnivoc-board .new-form p{font-size:13px;font-weight:600;color:#374151;margin:0 0 8px}" +
+    "#omnivoc-board .new-form .row{display:flex;gap:8px;align-items:flex-end;padding:0}" +
+    "#omnivoc-board .new-form textarea{flex:1;border:1px solid #ddd;border-radius:6px;padding:8px;font-size:13px;resize:none;height:52px;box-sizing:border-box}" +
+    "#omnivoc-board .new-form textarea:focus{outline:none;border-color:#000}" +
+    "#omnivoc-board .new-form button{background:#000;color:#fff;border:none;border-radius:6px;padding:8px 14px;font-size:13px;cursor:pointer;white-space:nowrap}" +
+    "#omnivoc-board .new-form button:disabled{opacity:.5}" +
+    "#omnivoc-board .new-form .ok{font-size:12px;color:#16a34a;margin:4px 0 0}";
   document.head.appendChild(style);
 
   var votedIds = JSON.parse(localStorage.getItem("omnivoc_votes_" + projectKey) || "[]");
   var expandedId = null;
 
+  function renderNewForm() {
+    return '<div class="new-form">' +
+      '<p>' + t.newLabel + '</p>' +
+      '<div class="row">' +
+      '<textarea id="omnivoc-new-ta" placeholder="' + t.newPlaceholder + '"></textarea>' +
+      '<button id="omnivoc-new-btn">' + t.send + '</button>' +
+      '</div>' +
+      '<div class="ok" id="omnivoc-new-ok" style="display:none">' + t.sent + '</div>' +
+      '</div>';
+  }
+
+  function bindNewForm() {
+    var ta = document.getElementById("omnivoc-new-ta");
+    var btn = document.getElementById("omnivoc-new-btn");
+    var ok = document.getElementById("omnivoc-new-ok");
+    if (!ta || !btn) return;
+    btn.addEventListener("click", function () {
+      var content = ta.value.trim();
+      if (!content) return;
+      btn.disabled = true;
+      btn.textContent = t.sending;
+      fetch(apiBase + "/api/feedback", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          project_key: projectKey,
+          channel: "board",
+          content: content,
+          source_url: window.location.href,
+        }),
+      }).then(function () {
+        ta.value = "";
+        btn.disabled = false;
+        btn.textContent = t.send;
+        ok.style.display = "block";
+        setTimeout(function () { ok.style.display = "none"; }, 3000);
+        fetch(apiBase + "/api/board/" + projectKey)
+          .then(function (r) { return r.json(); })
+          .then(render);
+      });
+    });
+  }
+
   function render(items) {
     if (!items || items.length === 0) {
-      container.innerHTML = '<div class="hdr"><h2>' + t.title + "</h2><p>" + t.subtitle + '</p></div><div class="empty">' + t.empty + "</div>";
+      container.innerHTML = '<div class="hdr"><h2>' + t.title + "</h2><p>" + t.subtitle + '</p></div>' + renderNewForm() + '<div class="empty">' + t.empty + "</div>";
+      bindNewForm();
       return;
     }
 
-    var html = '<div class="hdr"><h2>' + t.title + "</h2><p>" + t.subtitle + "</p></div>";
+    var html = '<div class="hdr"><h2>' + t.title + "</h2><p>" + t.subtitle + "</p></div>" + renderNewForm();
     items.forEach(function (item) {
       var isVoted = votedIds.indexOf(item.id) !== -1;
       html += '<div class="item" data-id="' + item.id + '">';
@@ -117,6 +179,7 @@
       html += "</div>";
     });
     container.innerHTML = html;
+    bindNewForm();
     bindEvents(items);
     if (expandedId) loadComments(expandedId);
   }
