@@ -7,6 +7,8 @@
   var projectKey = script.getAttribute("data-project-key");
   var apiBase = script.src.replace(/\/board\.js.*$/, "");
   var lang = script.getAttribute("data-lang") || document.documentElement.lang || "ja";
+  var mode = script.getAttribute("data-mode") || "all"; // "bug" | "feature" | "all"
+  var feedbackType = mode === "bug" ? "bug" : "feature";
 
   if (!projectKey) {
     console.error("[OmniVOC Board] data-project-key is required");
@@ -137,6 +139,7 @@
           channel: "board",
           content: content,
           source_url: window.location.href,
+          feedback_type: feedbackType,
         }),
       }).then(function () {
         ta.value = "";
@@ -170,10 +173,10 @@
       html += "<p>" + escHtml(item.content) + "</p>";
       html += '<div class="meta">';
       if (item.issue_url) html += '<a href="' + item.issue_url + '" target="_blank">#' + item.issue_number + "</a>";
-      html += '<button data-toggle="' + item.id + '">\uD83D\uDCAC ' + item.comments + "</button>";
+      if (item.feedback_type !== "bug") html += '<button data-toggle="' + item.id + '">\uD83D\uDCAC ' + item.comments + "</button>";
       html += "<span>" + new Date(item.created_at).toLocaleDateString() + "</span>";
       html += "</div></div></div>";
-      if (expandedId === item.id) {
+      if (expandedId === item.id && item.feedback_type !== "bug") {
         html += '<div class="cmt" id="cmt-' + item.id + '">' + t.loading + "</div>";
       }
       html += "</div>";
@@ -261,15 +264,19 @@
     }).then(function () {
       loadComments(feedbackId);
       // コメント数を再取得
-      fetch(apiBase + "/api/board/" + projectKey)
+      fetch(apiBase + "/api/board/" + projectKey + boardQuery())
         .then(function (r) { return r.json(); })
         .then(render);
     });
   }
 
+  function boardQuery() {
+    return mode !== "all" ? "?type=" + mode : "";
+  }
+
   // 初期読み込み
   container.innerHTML = '<div class="empty">' + t.loading + "</div>";
-  fetch(apiBase + "/api/board/" + projectKey)
+  fetch(apiBase + "/api/board/" + projectKey + boardQuery())
     .then(function (r) { return r.json(); })
     .then(render);
 })();

@@ -22,6 +22,7 @@ export async function POST(request: NextRequest) {
     sender_name,
     metadata,
     source_url,
+    feedback_type,
   } = body;
 
   if (!project_key || !channel || !content) {
@@ -57,6 +58,7 @@ export async function POST(request: NextRequest) {
       sender_name: sender_name ?? null,
       metadata: metadata ?? null,
       source_url: source_url ?? null,
+      feedback_type: ["bug", "feature", "other"].includes(feedback_type) ? feedback_type : "feature",
     })
     .select("id")
     .single();

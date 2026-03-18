@@ -12,10 +12,11 @@ export async function OPTIONS() {
 }
 
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ project_key: string }> }
 ) {
   const { project_key } = await params;
+  const typeFilter = request.nextUrl.searchParams.get("type"); // "bug" | "feature" | null
   const supabase = createServiceClient();
 
   // プロジェクト確認
@@ -33,11 +34,14 @@ export async function GET(
   }
 
   // 全フィードバックを取得（ステータス問わず即時表示）
-  const { data: feedbacks } = await supabase
+  let query = supabase
     .from("feedbacks")
-    .select("id, content, source_url, created_at, feedback_issues(issue_url, issue_number)")
-    .eq("project_id", project.id)
-    .order("created_at", { ascending: false });
+    .select("id, content, source_url, created_at, feedback_type, feedback_issues(issue_url, issue_number)")
+    .eq("project_id", project.id);
+  if (typeFilter === "bug" || typeFilter === "feature") {
+    query = query.eq("feedback_type", typeFilter);
+  }
+  const { data: feedbacks } = await query.order("created_at", { ascending: false });
 
   if (!feedbacks || feedbacks.length === 0) {
     return NextResponse.json([], { headers: corsHeaders });
@@ -71,6 +75,7 @@ export async function GET(
       content: f.content,
       source_url: f.source_url,
       created_at: f.created_at,
+      feedback_type: f.feedback_type,
       issue_url: f.feedback_issues?.[0]?.issue_url ?? null,
       issue_number: f.feedback_issues?.[0]?.issue_number ?? null,
       votes: voteMap[f.id] || 0,

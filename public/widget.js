@@ -8,6 +8,8 @@
   var apiBase = script.src.replace(/\/widget\.js.*$/, "");
   var lang = script.getAttribute("data-lang") || document.documentElement.lang || "ja";
   var customMessage = script.getAttribute("data-message");
+  var mode = script.getAttribute("data-mode") || "all"; // "bug" | "feature" | "all"
+  var feedbackType = mode === "bug" ? "bug" : "feature";
 
   if (!projectKey) {
     console.error("[OmniVOC] data-project-key is required");
@@ -69,6 +71,7 @@
         channel: "web",
         content: content,
         source_url: window.location.href,
+        feedback_type: feedbackType,
       }),
     })
       .then(function (res) { res.ok ? onSuccess() : onError(); })
