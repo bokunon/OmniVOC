@@ -36,7 +36,7 @@ export async function POST(
     octokit,
     repo_full_name,
     title,
-    appendNextActions(issue_body || feedback.content)
+    appendNextActions(issue_body || feedback.content, feedback.feedback_type)
   );
 
   // feedback_issues に紐付けを記録

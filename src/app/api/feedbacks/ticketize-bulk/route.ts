@@ -24,7 +24,7 @@ export async function POST(request: NextRequest) {
   // フィードバック一覧を取得
   const { data: feedbacks, error: fetchError } = await supabase
     .from("feedbacks")
-    .select("id, content")
+    .select("id, content, feedback_type")
     .in("id", feedback_ids);
 
   if (fetchError || !feedbacks || feedbacks.length === 0) {
@@ -39,8 +39,11 @@ export async function POST(request: NextRequest) {
     .map((f, i) => `${i + 1}. ${f.content}`)
     .join("\n");
 
+  // 全件 bug なら bug テンプレート、それ以外は feature テンプレート
+  const bulkType = feedbacks.every((f) => f.feedback_type === "bug") ? "bug" : "feature";
   const finalBody = appendNextActions(
-    issue_body || `## ユーザーフィードバック\n\n${feedbackSummary}`
+    issue_body || `## ユーザーフィードバック\n\n${feedbackSummary}`,
+    bulkType
   );
 
   // GitHub Issue を作成
