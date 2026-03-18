@@ -32,12 +32,11 @@ export async function GET(
     );
   }
 
-  // ticketed な要望を取得（Issue に紐付いているもの）
+  // 全フィードバックを取得（ステータス問わず即時表示）
   const { data: feedbacks } = await supabase
     .from("feedbacks")
     .select("id, content, source_url, created_at, feedback_issues(issue_url, issue_number)")
     .eq("project_id", project.id)
-    .eq("status", "ticketed")
     .order("created_at", { ascending: false });
 
   if (!feedbacks || feedbacks.length === 0) {
