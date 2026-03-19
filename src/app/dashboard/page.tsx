@@ -79,6 +79,7 @@ export default function DashboardPage() {
   const [ticketBody, setTicketBody] = useState("");
 
   // プロジェクト登録モーダル
+  const [copiedProjectId, setCopiedProjectId] = useState<string | null>(null);
   const [showProjectModal, setShowProjectModal] = useState(false);
   const [newProjectRepoUrl, setNewProjectRepoUrl] = useState("");
   const [newProjectName, setNewProjectName] = useState("");
@@ -386,11 +387,17 @@ export default function DashboardPage() {
               <button
                 onClick={() => {
                   navigator.clipboard.writeText(p.project_key);
+                  setCopiedProjectId(p.id);
+                  setTimeout(() => setCopiedProjectId(null), 1500);
                 }}
-                className="font-mono bg-gray-100 px-1.5 py-0.5 rounded hover:bg-gray-200 text-gray-700"
+                className={`font-mono px-1.5 py-0.5 rounded text-xs transition-colors ${
+                  copiedProjectId === p.id
+                    ? "bg-green-100 text-green-700"
+                    : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                }`}
                 title="クリックでproject_keyをコピー"
               >
-                {p.project_key}
+                {copiedProjectId === p.id ? "コピーしました!" : p.project_key}
               </button>
               <a
                 href={`/board/${p.project_key}`}
